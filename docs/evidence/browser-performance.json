@@ -1,0 +1,8 @@
+{
+  "count": 50000,
+  "uploadMs": 1292,
+  "frameMeanMs": 16.476666666691504,
+  "p95FrameMs": 16.700000000000273,
+  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)",
+  "note": "Renderer queried from the actual globe WebGL context; timings are environment-specific."
+}

@@ -1,0 +1,122 @@
+import { expect, test } from '@playwright/test'
+import { writeFile } from 'node:fs/promises'
+import { integrationHistory } from '../fixtures/integration'
+import { assertPrivateSurfaces, upload, wireProviders } from './helpers'
+
+test('complete local analysis preserves comparison activity and exclusion policies', async ({ page }, info) => {
+  const captured: string[] = []
+  const providers: string[] = []
+  page.on('console', event => captured.push(event.text()))
+  page.on('pageerror', error => captured.push(error.message))
+  page.on('request', request => {
+    captured.push(request.url(), request.postData() ?? '')
+    if (/dns\.google|get\.geojs/u.test(request.url())) providers.push(request.url())
+  })
+  await wireProviders(page)
+  await page.goto('/')
+  if (info.project.use.colorScheme === 'light') await page.getByRole('button', { name: '밝은 테마', exact: true }).click()
+  await upload(page, integrationHistory())
+  await expect(page.getByTestId('total-visits')).toHaveText('28회')
+  const periods = page.locator('.period-metrics')
+  await expect(periods.nth(0).locator('dd').first()).toHaveText('21회')
+  await expect(periods.nth(1).locator('dd').first()).toHaveText('7회')
+  await expect(page.getByRole('button', { name: '위치 조회', exact: true })).toBeDisabled()
+  expect(providers).toEqual([])
+  await page.getByRole('checkbox', { name: '외부 위치 조회에 동의합니다' }).check()
+  await page.getByRole('button', { name: '위치 조회', exact: true }).click()
+  await expect(page.getByText(/성공 2 · 실패 1/u)).toBeVisible()
+  expect(providers.filter(url => url.includes('dns.google'))).toHaveLength(6)
+  expect(providers.filter(url => url.includes('get.geojs'))).toHaveLength(2)
+  await expect(page.locator('.period').first()).toContainText('위치 확인 20건 · 미확인 1건')
+  const country = page.getByRole('region', { name: '국가 비교 표, 가로 스크롤 가능' })
+  await expect(country.getByRole('row').filter({ hasText: 'South Korea' })).toContainText('A 61.9% · B 71.4%')
+  await expect(country.getByRole('row').filter({ hasText: 'South Korea' })).toContainText('A 65.0% · B 71.4%')
+  await page.locator('#analysis-workbench').screenshot({ path: info.outputPath('comparison.png') })
+
+  await page.getByRole('combobox', { name: '비교 기간', exact: true }).selectOption('month')
+  await page.getByRole('button', { name: '비교하기', exact: true }).click()
+  await expect(periods.nth(0).locator('dd').first()).toHaveText('25회')
+  await expect(periods.nth(1).locator('dd').first()).toHaveText('3회')
+  await page.getByRole('combobox', { name: '비교 기간', exact: true }).selectOption('30')
+  await page.getByRole('button', { name: '비교하기', exact: true }).click()
+  await expect(periods.nth(0).locator('dd').first()).toHaveText('28회')
+  await expect(periods.nth(1).locator('dd').first()).toHaveText('0회')
+  await page.getByRole('combobox', { name: '비교 기간', exact: true }).selectOption('custom')
+  for (const [label, value] of [['A 시작일', '2026-11-11'], ['A 종료일', '2026-11-11'], ['B 시작일', '2026-11-01'], ['B 종료일', '2026-11-04']]) {
+    if (!label || !value) throw new Error('Missing custom period fixture')
+    await page.getByLabel(label, { exact: true }).fill(value)
+  }
+  await page.getByRole('button', { name: '비교하기', exact: true }).click()
+  await expect(periods.nth(0).locator('dd').first()).toHaveText('3회')
+  await expect(periods.nth(1).locator('dd').first()).toHaveText('4회')
+  await expect(page.locator('.comparison-panel [role="status"]')).toContainText('A 1일 · B 4일')
+  await page.getByRole('combobox', { name: '비교 기간', exact: true }).selectOption('7')
+  await page.getByRole('button', { name: '비교하기', exact: true }).click()
+  await page.getByRole('button', { name: 'A 지구본에서 보기', exact: true }).click()
+  await expect(page.getByTestId('total-visits')).toHaveText('21회')
+  await expect(periods.nth(1).locator('dd').first()).toHaveText('7회')
+  await page.getByRole('button', { name: '필터 초기화', exact: true }).click()
+
+  await page.getByRole('tab', { name: '디지털 활동 패턴' }).click()
+  const activity = page.locator('.activity-insights-panel')
+  const sessionCount = activity.locator('.activity-metrics > div').filter({ hasText: '관찰 세션 조각' }).locator('dd')
+  await expect(sessionCount).toHaveText('14개')
+  await expect(activity.locator('.activity-metrics > div').filter({ hasText: '도메인 전환' }).locator('dd')).toHaveText('18건')
+  await page.getByLabel('세션 분리 간격 (분)').fill('5')
+  await page.getByRole('button', { name: '세션 기준 적용' }).click()
+  await expect(sessionCount).toHaveText('28개')
+  await page.getByLabel('세션 분리 간격 (분)').fill('30')
+  await page.getByRole('button', { name: '세션 기준 적용' }).click()
+  await expect(sessionCount).toHaveText('14개')
+  await activity.screenshot({ path: info.outputPath('activity.png') })
+
+  await page.getByRole('tab', { name: '개인정보 점검' }).click()
+  await expect(page.locator('.security-metrics > div').filter({ hasText: '탐지된 기록' }).locator('dd')).toHaveText('5건')
+  await page.getByRole('combobox', { name: '탐지 종류', exact: true }).selectOption('authentication')
+  await expect(page.locator('.security-panel .finding-list > li')).toHaveCount(1)
+  await page.getByRole('checkbox', { name: '분석에서 제외 (공유에도 적용)', exact: true }).check()
+  await expect(page.getByTestId('total-visits')).toHaveText('27회')
+  await page.getByRole('combobox', { name: '탐지 종류', exact: true }).selectOption({ label: '전체 종류' })
+  const pager = page.getByRole('navigation', { name: '검토 기록 페이지' })
+  await pager.getByRole('button', { name: '다음', exact: true }).click()
+  await pager.getByRole('button', { name: '다음', exact: true }).click()
+  await page.locator('.finding-list > li').filter({ hasText: 'example.com' })
+    .getByRole('checkbox', { name: '공유에서만 제외', exact: true }).check()
+  await expect(page.getByTestId('total-visits')).toHaveText('27회')
+  await page.locator('.security-panel').screenshot({ path: info.outputPath('security.png') })
+  await assertPrivateSurfaces(page, captured)
+
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  const fresh = await page.context().newPage()
+  const freshRequests: string[] = []
+  fresh.on('request', request => { if (/dns\.google|get\.geojs/u.test(request.url())) freshRequests.push(request.url()) })
+  await fresh.goto('/__integration_qa__/')
+  await upload(fresh, integrationHistory())
+  await expect(fresh.getByTestId('total-visits')).toHaveText('28회')
+  expect(freshRequests).toEqual([])
+  await assertPrivateSurfaces(fresh, freshRequests)
+  expect(await fresh.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await fresh.close()
+  await writeFile(info.outputPath('flow.json'), JSON.stringify({
+    browser: info.project.name, source: 'synthetic HTTP provider fixtures; real production application',
+    input: 28, local: 27, analysisExcluded: 1, shareExcluded: 1,
+    hardware: 'desktop host with browser viewport/touch emulation; no physical mobile hardware',
+  }, null, 2))
+})
+
+test('the last accepted timestamp remains readable across local analysis panels', async ({ page }) => {
+  const errors: string[] = []
+  page.on('pageerror', error => errors.push(error.message))
+  await page.goto('/')
+  await upload(page, [{ url: 'https://example.com/?password=DEMO_PASS_abc123', timestamp: 8.64e15 }])
+  await page.getByRole('combobox', { name: '비교 기간', exact: true }).selectOption('month')
+  await page.getByRole('button', { name: '비교하기', exact: true }).click()
+  await expect(page.locator('.period').first()).toContainText('+275760-09-13')
+  await expect(page.locator('.period-metrics').first().locator('dd').first()).toHaveText('1회')
+  await page.getByRole('tab', { name: '디지털 활동 패턴' }).click()
+  await expect(page.locator('.fragment-list')).toContainText('+275760-09-13 00:00 UTC')
+  await page.getByRole('tab', { name: '개인정보 점검' }).click()
+  await expect(page.locator('.finding-list')).toContainText('+275760-09-13 UTC')
+  await expect(page.locator('.finding-list')).not.toContainText('DEMO_PASS_abc123')
+  expect(errors).toEqual([])
+})

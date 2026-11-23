@@ -1,0 +1,46 @@
+{
+  "name": "history-orbit",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "vue-tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:performance": "vitest run tests/performance.test.ts --reporter=verbose",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "echarts": "^6.0.0",
+    "fflate": "^0.8.2",
+    "ipaddr.js": "^2.2.0",
+    "ky": "^1.14.0",
+    "qrcode": "^1.5.4",
+    "three": "^0.181.0",
+    "three-globe": "^2.44.0",
+    "tldts": "^7.0.19",
+    "vue": "^3.5.22",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@playwright/test": "^1.56.1",
+    "@types/node": "^24.10.0",
+    "@types/qrcode": "^1.5.6",
+    "@types/three": "^0.181.0",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "eslint": "^9.39.0",
+    "eslint-plugin-vue": "^10.5.1",
+    "globals": "^14.0.0",
+    "jsqr": "^1.4.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.46.3",
+    "vite": "^7.2.2",
+    "vitest": "^3.2.4",
+    "vue-eslint-parser": "^10.2.0",
+    "vue-tsc": "^3.1.3"
+  }
+}

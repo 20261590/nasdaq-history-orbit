@@ -1,0 +1,41 @@
+import { getDomain } from 'tldts'
+import { canonicalizeUrl } from './canonicalize'
+
+export interface UrlHash {
+  readonly fullHash: string
+  readonly prefix: string
+}
+
+export function urlExpressions(raw: string): readonly string[] {
+  const { host, path, query, isIp } = canonicalizeUrl(raw)
+  const hosts = new Set([host])
+  if (!isIp) {
+    const domain = getDomain(host, { allowPrivateDomains: true })
+    if (domain !== null) {
+      const labels = host.split('.')
+      const domainLabels = domain.split('.').length
+      for (let extra = 0; extra < 4 && domainLabels + extra < labels.length; extra++) {
+        hosts.add(labels.slice(-(domainLabels + extra)).join('.'))
+      }
+    }
+  }
+  const paths = new Set<string>()
+  if (query !== null) paths.add(`${path}?${query}`)
+  paths.add(path)
+  let slash = 0
+  for (let count = 0; count < 4 && slash >= 0; count++) {
+    paths.add(path.slice(0, slash + 1))
+    slash = path.indexOf('/', slash + 1)
+  }
+  return Array.from(hosts).flatMap((hostname) => Array.from(paths, (prefix) => hostname + prefix))
+}
+
+export async function hashUrl(raw: string): Promise<readonly UrlHash[]> {
+  return Promise.all(urlExpressions(raw).map(async (expression) => {
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(expression)))
+    return {
+      fullHash: btoa(String.fromCharCode(...digest)),
+      prefix: btoa(String.fromCharCode(...digest.slice(0, 4))),
+    }
+  }))
+}

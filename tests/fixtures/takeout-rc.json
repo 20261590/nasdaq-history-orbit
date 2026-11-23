@@ -1,0 +1,10 @@
+{
+  "Browser History": [
+    {"url":"https://www.naver.com/","title":"Synthetic public fixture","time_usec":"1767571200000000","page_transition":"LINK"},
+    {"url":"https://github.com/","title":"Synthetic project","time_usec":"1767574800000000","page_transition":"LINK"},
+    {"url":"https://missing.example.com/","title":"Synthetic unresolved site","time_usec":"1767578400000000","page_transition":"LINK"},
+    {"url":"https://github.com/explore","time_usec":"1767582000000000","page_transition":"LINK"},
+    {"url":"https://www.naver.com/search?synthetic=1","time_usec":"1767672000000000","page_transition":"LINK"},
+    {"url":"https://missing.example.com/again","time_usec":"1767675600000000","page_transition":"LINK"}
+  ]
+}

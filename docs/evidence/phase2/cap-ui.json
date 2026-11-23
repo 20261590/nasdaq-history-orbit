@@ -1,0 +1,9 @@
+{
+  "inputRows": 100001,
+  "inputBytes": 6238956,
+  "validVisits": 100000,
+  "rejected": 1,
+  "retainedMarkers": 2,
+  "unsupportedArcs": 0,
+  "skippedTimestamp": 1700000000500
+}

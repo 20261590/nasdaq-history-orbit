@@ -1,0 +1,8 @@
+{
+  "count": 100,
+  "uploadMs": 77,
+  "markers": 1,
+  "frameMeanMs": 16.603333333432673,
+  "p95FrameMs": 16.799999999999955,
+  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)"
+}

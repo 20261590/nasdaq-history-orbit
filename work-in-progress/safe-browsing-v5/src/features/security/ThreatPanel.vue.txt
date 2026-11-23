@@ -1,0 +1,170 @@
+<script setup lang="ts">
+import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
+import type { Visit } from '../../model'
+import type { MaskedSecurityRow } from '../../core/security'
+import { SafeBrowsingEngine } from './safe-browsing/engine'
+import { SafeBrowsingError } from './safe-browsing/types'
+import type { FailureCode, ReputationResult, ReputationStatus, ThreatType } from './safe-browsing/types'
+
+const props = defineProps<{ visits: readonly Visit[]; maskedRows: readonly MaskedSecurityRow[] }>()
+const engine = new SafeBrowsingEngine()
+const state = shallowRef(engine.snapshot())
+const apiKey = ref('')
+const consent = ref(false)
+const page = ref(0)
+const statusFilter = ref<ReputationStatus | ''>('')
+const message = ref('')
+const pageSize = 12
+let generation = 0
+let alive = true
+let freshnessTimer: ReturnType<typeof setTimeout> | undefined
+const labels: Readonly<Record<ReputationStatus, string>> = {
+  KNOWN_THREAT: '알려진 위협 정보 일치', NO_KNOWN_THREAT: '알려진 위협 미발견',
+  NOT_CHECKED: '미검사', CHECK_FAILED: '검사 실패', STALE: '재검사 필요',
+}
+const threatLabels: Readonly<Record<ThreatType, string>> = {
+  MALWARE: '악성코드', SOCIAL_ENGINEERING: '피싱·사회공학',
+  UNWANTED_SOFTWARE: '원치 않는 소프트웨어', POTENTIALLY_HARMFUL_APPLICATION: '유해할 수 있는 앱',
+}
+const failureLabels: Readonly<Record<FailureCode, string>> = {
+  AUTH: 'API 키·API 사용 설정·v5 접근 권한을 확인해 주세요.',
+  RATE_LIMITED: 'Google 호출 한도를 초과했습니다. 잠시 후 사용량을 확인하고 다시 검사해 주세요.',
+  NETWORK: '네트워크·CORS·호스트의 CSP 설정을 확인해 주세요.',
+  INVALID_RESPONSE: 'Google 응답을 검증하지 못했습니다.',
+  INVALID_URL: '이 URL의 해시 표현을 만들지 못했습니다.',
+  CANCELLED: '검사가 중단되어 처리하지 못했습니다.', REQUEST_LIMIT: '이번 검사의 요청 상한에 도달했습니다.',
+  CONSENT_REQUIRED: '외부 조회 동의가 필요합니다.', KEY_REQUIRED: '개인 API 키가 필요합니다.',
+}
+const targets = computed(() => {
+  const masks = new Map(props.maskedRows.map(row => [row.order, row]))
+  const seen = new Set<string>()
+  return props.visits.flatMap(visit => {
+    const mask = masks.get(visit.order)
+    if (!visit.url || !mask || seen.has(visit.url)) return []
+    seen.add(visit.url)
+    return [{ id: `record-${visit.order}`, url: visit.url, maskedUrl: mask.maskedUrl, siteLabel: mask.siteLabel }]
+  })
+})
+const rows = computed(() => {
+  const results = new Map(state.value.results.map(result => [result.id, result]))
+  return targets.value.map(({ id, maskedUrl, siteLabel }) => ({
+    id, maskedUrl, siteLabel,
+    result: results.get(id) ?? { id, status: 'NOT_CHECKED', threats: [], checkedAt: null, expiresAt: null, error: null } satisfies ReputationResult,
+  }))
+})
+const counts = computed(() => {
+  const result: Record<ReputationStatus, number> = { KNOWN_THREAT: 0, NO_KNOWN_THREAT: 0, NOT_CHECKED: 0, CHECK_FAILED: 0, STALE: 0 }
+  for (const row of rows.value) result[row.result.status]++
+  return result
+})
+const filtered = computed(() => rows.value.filter(row => !statusFilter.value || row.result.status === statusFilter.value))
+const canScan = computed(() => consent.value && apiKey.value.trim().length > 0 && targets.value.length > 0 && !state.value.running)
+const dateText = (time: number | null) => time === null ? '검사 기록 없음' : new Date(time).toISOString().replace('T', ' ').replace('Z', ' UTC')
+function refresh() {
+  clearTimeout(freshnessTimer)
+  state.value = engine.snapshot()
+  const deadline = state.value.results.reduce((earliest, row) =>
+    row.status === 'KNOWN_THREAT' || row.status === 'NO_KNOWN_THREAT'
+      ? Math.min(earliest, row.expiresAt ?? 0, (row.checkedAt ?? 0) + 30 * 60_000) : earliest, Infinity)
+  if (Number.isFinite(deadline)) freshnessTimer = setTimeout(refresh, Math.max(1, deadline - Date.now()))
+}
+function clearResults() {
+  generation++
+  engine.clear()
+  message.value = ''
+  page.value = 0
+  refresh()
+}
+function cancel() { engine.cancel(); refresh() }
+function forget() { clearResults(); apiKey.value = ''; consent.value = false }
+async function scan(forceRefresh = false) {
+  if (!canScan.value) return
+  const run = ++generation
+  message.value = ''
+  try {
+    await engine.scan(targets.value.map(({ id, url }) => ({ id, url })), {
+      apiKey: apiKey.value.trim(), consent: consent.value, forceRefresh,
+      onUpdate: () => { if (alive && run === generation) refresh() },
+    })
+    if (alive && run === generation) refresh()
+  } catch (error) {
+    if (!(error instanceof Error)) throw error
+    if (alive && run === generation) {
+      message.value = error instanceof SafeBrowsingError ? failureLabels[error.code] : '검사를 완료하지 못했습니다.'
+      refresh()
+    }
+  }
+}
+watch([() => props.visits, () => props.maskedRows, apiKey], clearResults, { flush: 'sync' })
+watch(consent, value => { if (!value) clearResults() })
+watch(statusFilter, () => { page.value = 0 })
+onUnmounted(() => { alive = false; generation++; engine.clear(); clearTimeout(freshnessTimer); apiKey.value = '' })
+</script>
+
+<template>
+  <section class="reputation-panel" aria-labelledby="reputation-title">
+    <header><h2 id="reputation-title">Google 사이트 위험 점검</h2>
+      <p>Google Safe Browsing v5의 알려진 위협 평판을 조회합니다. 사이트 취약점이나 실제 해킹 여부를 검사하지 않습니다.</p>
+    </header>
+    <p class="muted">분석에서 제외하지 않은 전체 유효 URL을 중복 제거해 검사합니다. 상단 기간·사이트 필터와 별개입니다.</p>
+    <p class="muted">원본 URL·인증정보 대신 로컬에서 계산한 SHA-256 해시의 4바이트 접두사만 Google에 전송합니다. 접두사도 URL 후보를 좁힐 수 있으며 Google은 접속 IP·API 키·이 앱의 원점을 볼 수 있습니다. OHTTP 중계는 사용하지 않습니다.</p>
+    <p class="muted">개인 키는 화면의 세션 메모리에만 둡니다. 브라우저 사용자·확장 프로그램에서 보일 수 있어 비밀 보관소가 아닙니다. Vite 빌드 키를 포함하지 않습니다. 다른 분석 탭을 선택하거나 새 분석을 시작하면 키·결과가 초기화됩니다.</p>
+    <p class="muted">Google 정보에는 오탐과 누락이 있을 수 있습니다. 위협 미발견은 안전을 보장하지 않습니다. 비상업적 사용만 허용되며 키의 Safe Browsing API 제한·할당량·웹사이트 제한 지원을 확인해야 합니다.</p>
+    <p class="small"><a href="https://developers.google.com/safe-browsing/v4/advisory" target="_blank" rel="noopener noreferrer">Advisory provided by Google</a> · 정보의 완전성과 정확성은 보장되지 않습니다.</p>
+    <label class="key-field">개인 Safe Browsing API 키
+      <input v-model="apiKey" type="password" autocomplete="off" spellcheck="false" maxlength="256" :disabled="state.running">
+    </label>
+    <label class="consent"><input v-model="consent" type="checkbox"> 비상업적 이용 조건과 정확도·개인정보 한계를 확인했고 Google 외부 평판 조회에 동의합니다.</label>
+    <div class="actions">
+      <button class="primary" :disabled="!canScan" @click="scan(false)">위험 점검 시작</button>
+      <button :disabled="!canScan" @click="scan(true)">Google에 재검사</button>
+      <button :disabled="!state.running" @click="cancel">위험 점검 중단</button>
+      <button :disabled="!apiKey && !state.results.length" @click="forget">키·결과 지우기</button>
+    </div>
+    <p class="small muted">재검사는 유효한 캐시도 새로 조회합니다. 일반 검사는 캐시를 재사용하며 조회 시각을 갱신하지 않습니다. 요청·동시성 상한과 Google 할당량에 따라 일부 URL은 미검사로 남을 수 있습니다.</p>
+    <p v-if="!targets.length" role="status">검사 대상 URL이 없습니다. 방문기록과 분석 제외 설정을 확인해 주세요.</p>
+    <p v-if="message" role="alert">{{ message }}</p>
+    <progress :value="state.completed" :max="targets.length || 1" aria-label="Google 위험 점검 진행률" />
+    <p role="status">{{ state.running ? '검사 중' : '대기' }} · 처리 {{ state.completed }} / {{ targets.length }}개 URL · 이번 요청 {{ state.requests }}회</p>
+    <dl class="reputation-metrics">
+      <div><dt>전체 대상 URL</dt><dd>{{ targets.length }}</dd></div>
+      <div><dt>검사 완료 URL</dt><dd>{{ counts.KNOWN_THREAT + counts.NO_KNOWN_THREAT }}</dd></div>
+      <div><dt>알려진 위협 발견</dt><dd>{{ counts.KNOWN_THREAT }}</dd></div>
+      <div><dt>알려진 위협 미발견</dt><dd>{{ counts.NO_KNOWN_THREAT }}</dd></div>
+      <div><dt>미검사</dt><dd>{{ counts.NOT_CHECKED }}</dd></div>
+      <div><dt>검사 실패</dt><dd>{{ counts.CHECK_FAILED }}</dd></div>
+      <div><dt>재검사 필요</dt><dd>{{ counts.STALE }}</dd></div>
+    </dl>
+    <p>마지막 Google 확인: {{ dateText(state.lastCheckedAt) }}</p>
+    <p class="small muted">캐시가 만료되거나 Google 확인 후 30분이 지나면 STALE로 전환합니다. 오래된 결과는 현재 위험 경고로 표시하지 않습니다.</p>
+    <label>위험 점검 결과 필터<select v-model="statusFilter"><option value="">전체 상태</option><option v-for="(label, status) in labels" :key="status" :value="status">{{ label }}</option></select></label>
+    <ol class="reputation-results">
+      <li v-for="row in filtered.slice(page * pageSize, (page + 1) * pageSize)" :key="row.id" :data-reputation-status="row.result.status">
+        <strong>{{ row.siteLabel }}</strong><span>{{ labels[row.result.status] }} · {{ row.result.status }}</span>
+        <p class="masked-preview">{{ row.maskedUrl }}</p>
+        <p v-if="row.result.status === 'KNOWN_THREAT'" class="warning">위험 가능성: {{ row.result.threats.map(type => threatLabels[type]).join(', ') }}. 실제 악성 여부를 보장하는 판정은 아닙니다.</p>
+        <p v-if="row.result.status === 'KNOWN_THREAT'" class="small"><a href="https://developers.google.com/safe-browsing/v4/advisory" target="_blank" rel="noopener noreferrer">Advisory provided by Google</a> · 오탐과 누락이 있을 수 있습니다.</p>
+        <p v-if="row.result.error" class="small">{{ failureLabels[row.result.error] }}</p>
+        <p class="small muted">{{ dateText(row.result.checkedAt) }}</p>
+      </li>
+    </ol>
+    <nav v-if="filtered.length > pageSize" class="actions" aria-label="위험 점검 결과 페이지"><button :disabled="page === 0" @click="page--">이전 결과</button><span>{{ page + 1 }} / {{ Math.ceil(filtered.length / pageSize) }}</span><button :disabled="(page + 1) * pageSize >= filtered.length" @click="page++">다음 결과</button></nav>
+    <p class="small"><a href="https://developers.google.com/safe-browsing/terms" target="_blank" rel="noopener noreferrer">Google 이용 약관</a> · <a href="https://www.antiphishing.org/" target="_blank" rel="noopener noreferrer">피싱 안내</a> · <a href="https://developers.google.com/search/docs/monitor-debug/security/malware" target="_blank" rel="noopener noreferrer">악성코드 안내</a> · <a href="https://www.google.com/about/unwanted-software-policy.html" target="_blank" rel="noopener noreferrer">원치 않는 소프트웨어 정책</a></p>
+  </section>
+</template>
+
+<style scoped>
+.reputation-panel { display: grid; gap: 16px; min-width: 0; padding-block: 32px; border-top: 1px solid var(--border); }
+header p { margin-top: 8px; }
+.key-field { display: grid; gap: 8px; max-width: 480px; }
+.key-field input { min-width: 0; width: 100%; }
+.consent { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.reputation-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); gap: 16px; }
+.reputation-metrics dt { color: var(--muted); font-size: 14px; }
+.reputation-metrics dd { margin: 4px 0 0; font-size: 20px; font-variant-numeric: tabular-nums; }
+.reputation-results { display: grid; gap: 16px; }
+.reputation-results li { min-width: 0; display: grid; gap: 8px; padding-block: 16px; border-bottom: 1px solid var(--border); }
+.masked-preview, .reputation-results strong { overflow-wrap: anywhere; }
+.small { font-size: 14px; }
+</style>
