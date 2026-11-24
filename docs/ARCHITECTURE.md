@@ -1,57 +1,80 @@
-# 아키텍처
+# History Orbit 아키텍처
 
-History Orbit은 Vue 3 + TypeScript + Vite로 빌드하는 정적 SPA입니다. Three.js와 three-globe가 지구본을, ECharts가 활동 분포를 렌더링합니다. 자체 서버, DB, 로그인, 프록시, 서버리스 함수가 없습니다. 개발용 Vite 서버는 정적 파일과 개발 모듈만 제공합니다.
+History Orbit은 Vue 3 + TypeScript + Vite 기반의 정적 SPA다. 기능 코드는 `src/features`, 기능 조합은 `src/app`, 공통 계약과 무상태 유틸리티는 `src/shared`가 소유한다. 백엔드, 데이터베이스, 전역 상태 라이브러리는 사용하지 않는다.
 
-## 로컬 데이터 흐름
-
-```text
-File / drop
-  -> FileReader (20 MiB 검증, 읽기 진행률)
-  -> JSON.parse
-  -> 정규화 / 중복 제거 / 공용 hostname 필터 / 시간순 정렬
-  -> 전체 방문 이벤트 (최대 100,000)
-      -> UTC 기간 필터 -> 국가 필터 -> 전체 통계
-      -> 대표 이벤트 최대 800 -> 인접 이벤트만 아크
-      -> 전체 유효 연결 최대 400 -> 전체 궤적
-```
-
-`src/model.ts`가 Visit, HostLocation, GeoLocation, Statistics, AnalysisSnapshot의 계약입니다. Visit의 `hostname`은 DNS 대상이고 `domain`은 tldts가 계산하는 등록 가능 도메인입니다. 서로 다른 hostname은 통계상 같은 사이트여도 별도로 조회합니다.
-
-Visit `order`는 원본 정규화 시계열의 순서입니다. 시각을 아는 제외 이벤트도 순서 자리를 차지하므로 그 앞뒤를 잇지 않습니다. 처리 범위 안에 시각을 전혀 배치할 수 없는 레코드가 있거나, 입력이 100,000건을 넘어 꼬리를 검사하지 않은 경우에는 해당 파일의 연속성 추론을 중단하며 처리한 유효 방문과 통계는 유지합니다. 배열의 꼬리가 시간순 마지막이라는 보장이 없으므로, 검사하지 않은 꼬리의 시각이 보존된 방문 사이에 있을 수도 있습니다. 샘플링, 국가 필터, 미확인 위치 때문에 끊긴 방문도 연결하지 않습니다. `src/globe-data.ts`는 두 순서가 연속이고 두 위치가 유효할 때만 방향성 아크를 만듭니다.
-
-## 동의 이후의 위치 흐름
+## 디렉터리 구조
 
 ```text
-빈도순 고유 hostname
-  -> Google DoH A + AAAA
-  -> 응답 상태 / CNAME / 공용 IP 검증
-  -> 중복 IP 메모리 캐시
-  -> GeoJS
-  -> 스키마 / 좌표 / 정확도 검증
-  -> hostname별 복수 위치
-  -> 마커 / 사이트 상세 / 국가와 한국 지역 통계
+src/
+├── app/
+│   ├── adapters/          # Feature 간 형식 변환, 전역 검증 설정
+│   ├── components/        # 여러 Feature를 조합하는 화면
+│   └── composables/       # 앱 실행 흐름과 화면 상태
+├── features/
+│   ├── history/           # 업로드, 파싱, 정규화, 중복 제거
+│   ├── geolocation/       # DNS, GeoIP, 캐시, 위치 표시
+│   ├── globe/             # Three.js, 궤적, 카메라, 재생
+│   ├── analytics/         # 통계, 비교, 활동 분석, 차트
+│   ├── security/          # 개인정보 점검, 제외 정책, Safe Browsing v5
+│   └── share/             # 동결된 NOT IMPLEMENTED 계약
+├── shared/
+│   ├── styles/            # 디자인 토큰과 공통 UI 스타일
+│   ├── types/             # Feature 경계를 통과하는 공통 데이터 계약
+│   └── utils/             # 특정 Feature에 의존하지 않는 유틸리티
+└── App.vue                # 공개 컴포넌트 연결과 최상위 레이아웃
 ```
 
-요청 동시성을 제한하고, 조회 상태는 성공·실패·미확인으로 유지합니다. 한 공급자 오류가 전체 분석을 중단하지 않습니다. 취소 신호를 전파하고 완료한 결과를 보존합니다. 새 파일을 분석하면 이전 조회를 취소하고 엔진과 메모리 캐시를 교체합니다.
+각 Feature의 외부 진입점은 `index.ts`다. 다른 Feature나 App은 Feature 내부의 `core/`, `services/`, `components/`를 직접 import하지 않는다. Feature 내부 코드는 자기 내부 구현과 `shared`만 참조한다. `shared`는 App 또는 Feature에 의존하지 않는다.
 
-대표 재생 위치는 A 그룹 후 AAAA 그룹에서 주소 값으로 정렬한 첫 번째 유효 GeoIP 위치입니다. 마커와 상세에는 복수 결과를 보존합니다. 동일 좌표는 사이트별로 집계하고, 서로 다른 IP가 동일 위치를 반환해도 그 마커의 방문 건수를 이중 계산하지 않습니다.
+## 의존성 방향
 
-## UI 상태
+```text
+App.vue
+  -> app/composables + app/components + app/adapters
+  -> feature index.ts
+feature internals
+  -> shared types/utils
+app adapters
+  -> feature index.ts + shared
+shared
+  -> 외부 패키지 또는 표준 API만
+```
 
-- 초기 화면: 파일/드롭, 형식 설명, 로컬 처리 안내, 합성 예제.
-- 초기의 장식용 지구는 실제 렌더에서 만든 32.8 KB 정적 WebP 포스터입니다. 분석을 시작할 때만 3D와 차트를 동적으로 불러오며, 분석 지구본의 기능은 유지합니다.
-- 분석: 조회 동의와 진행 상태, 기간·국가 필터, 전체 통계, 지구본, 사이트 선택, 타임라인, 활동 차트.
-- 공유 모달: 익명 기본값, 사이트명 포함 명시 선택, 압축 결과 미리보기, QR, URL 복사, 새 탭 복원.
-- 복원: 저장된 집계와 경로만 사용. 외부 조회와 원본 기준 기간·국가 재분석은 비활성화.
+`tests/architecture-boundaries.test.ts`가 공개 진입점 우회, shared의 역방향 의존, 계층 순환을 검사한다. `bun run test:architecture`로 독립 실행할 수 있으며 전체 단위 테스트에도 포함된다.
 
-Vue의 텍스트 보간으로 외부 문자열을 출력합니다. 원본 제목이나 URL을 HTML로 삽입하지 않습니다. ECharts 툴팁은 `richText` 방식으로 처리합니다.
+## 데이터 흐름
 
-## 렌더링과 수명
+```text
+JSON File / Drop
+  -> HistoryUploadPanel
+  -> History.parseHistory
+  -> Visit[] (정규화, 시간순, 중복 제거)
+       ├─> Security.inspectSecurity / Safe Browsing (동의 후 해시 접두사만 외부 조회)
+       ├─> Geolocation.LocationEngine (동의 후 hostname/IP 조회)
+       │     └─> HostLocation[] -> Globe
+       └─> Analytics (Statistics / Comparison / Activity)
+             └─> App adapter -> 익명 집계 ShareInput -> frozen SharePanel
+```
 
-three-globe의 병합 포인트는 BufferGeometry를 사용합니다. 마커 좌표를 집계하고 1,500개로 제한합니다. Three.js의 기본 절두체 컬링을 사용하며 불필요한 지구본 재생성을 피합니다. 요청한 시계열 전체를 매 프레임 GPU 객체로 만들지 않습니다.
+원본 URL은 History와 Security 경계 안에서 필요한 기간만 유지한다. Geolocation은 hostname과 공용 IP만 사용하며, Analytics는 정규화된 이벤트를 사용한다. Share 어댑터는 기존 계약이 허용하는 집계만 명시적으로 복사한다.
 
-카메라/마커/아크는 별도 반응형 입력으로 갱신합니다. 사용자가 보지 않는 탭이나 화면 밖에서는 렌더러 작업을 멈춥니다. 컴포넌트 해제 시 requestAnimationFrame, OrbitControls, ResizeObserver, IntersectionObserver, three-globe ticker, 지오메트리·머티리얼·텍스처·WebGL 컨텍스트를 정리합니다. WebGL을 초기화할 수 없으면 오류 안내와 통계·공유를 유지합니다.
+## 기능별 책임
 
-표시 해상도는 기본 DPR 2까지, 4코어 이하 또는 데이터 절약 환경은 DPR 1과 낮은 곡선 분할 수를 사용합니다. 보이는 화면의 90프레임 중 45프레임 이상이 33.3 ms를 넘으면 같은 성능 우선 모드로 전환합니다. 이 기준은 기기 등급 판정이나 FPS 보장이 아닌 로컬 표시 정책입니다. 마커·아크 데이터 수는 그대로 유지합니다. 사용자가 드래그를 시작하면 자동 카메라 보간을 중단해 직접 조작이 우선됩니다.
+- History: 파일 크기와 JSON 형식 검증, 공용 웹 방문 URL 파싱, 등록 도메인 정규화, 중복 제거, 시간순 정렬, 재생 샘플링.
+- Geolocation: Google DoH, GeoJS, 공용 IP 검증, 요청 취소·동시성·캐시, 공급자 응답 검증, 위치 정밀도 표시.
+- Globe: 마커·아크 계산, Three.js 수명주기, 비행 보간, 최소 2초 체류, 일시정지·재생 동기화. 리팩터링에서는 알고리즘을 변경하지 않았다.
+- Analytics: 방문 통계, 사이트 순위, UTC 분포, 기간 비교, 세션·전환 분석과 차트.
+- Security: 로컬 개인정보 탐지, URL 마스킹, 분석/공유 제외, Google Safe Browsing v5. Safe Browsing 엔진과 공개 배포 키 정책은 유지한다.
+- Share: `index.ts`, `types.ts`, `SharePanel.vue`가 동결돼 있으며 NOT IMPLEMENTED다. App 어댑터만 기존 입력 계약을 만든다.
 
-공유 복원과 본문은 `src/share/codec.ts`로 연결됩니다. 압축 데이터는 서버에 저장되지 않으며, URL fragment에서 검증 후 복원됩니다.
+## Vue, CSS, TypeScript 분리
+
+Feature 컴포넌트의 template과 이벤트 연결은 `components/*.vue`, 계산과 외부 조회는 `core/*.ts` 또는 `services/*.ts`, 기능별 레이아웃은 `<feature>.css`에 둔다. `src/style.css`는 디자인 토큰, 공통 스타일과 Feature 스타일을 순서대로 불러오는 진입점이다. Security 컴포넌트의 기존 scoped 스타일은 동작 보존을 위해 유지한다.
+
+## 주요 설계 결정
+
+- `useHistoryOrbit`이 화면 전체 실행 순서와 취소 가능한 작업을 조정한다. App.vue는 공개 컴포넌트 조합과 상태 전달만 담당한다.
+- 공통 `Visit`, `HostLocation`, `Statistics` 계약은 `shared/types`에 둔다. 한 기능에만 필요한 비교·활동·Safe Browsing 타입은 해당 Feature에 남긴다.
+- Share 변환은 `app/adapters/share-input.ts`에 둔다. Analytics나 Security가 Share 내부 계약에 직접 결합되지 않게 한다.
+- 카메라, 분석, Safe Browsing 알고리즘은 파일 이동과 import 경로 정리만 수행하고 계산 의미를 바꾸지 않는다.
+- GitHub Pages base path와 배포 workflow는 기존 설정을 유지한다.

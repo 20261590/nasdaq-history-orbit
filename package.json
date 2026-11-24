@@ -10,8 +10,9 @@
     "typecheck": "vue-tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
+    "test:architecture": "vitest run tests/architecture-boundaries.test.ts",
     "test:performance": "vitest run tests/performance.test.ts --reporter=verbose",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test && playwright test --config playwright.no-safe-browsing-key.config.ts"
   },
   "dependencies": {
     "echarts": "^6.0.0",

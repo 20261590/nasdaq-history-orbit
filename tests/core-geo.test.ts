@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isPublicIp, parseDns, parseGeo } from '../src/core/geo'
+import { isPublicIp, parseDns, parseGeo } from '../src/features/geolocation'
 
 describe('public network and API boundaries', () => {
   it.each([

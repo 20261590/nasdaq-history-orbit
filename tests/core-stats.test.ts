@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { createDemoHistory, createMockHosts } from '../src/core/demo'
-import { parseHistory } from '../src/core/history'
-import { computeStatistics } from '../src/core/stats'
-import type { GeoLocation, HostLocation } from '../src/model'
+import { createDemoHistory, parseHistory } from '../src/features/history'
+import { createMockHosts } from '../src/features/geolocation'
+import { computeStatistics } from '../src/features/analytics'
+import type { GeoLocation, HostLocation } from '../src/shared/types'
 
 const seoul: GeoLocation = {
   latitude: 37.5665, longitude: 126.978, country: 'South Korea', countryCode: 'KR',

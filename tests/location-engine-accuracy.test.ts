@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { LocationEngine } from '../src/core/geo'
-import { parseHistory } from '../src/core/history'
+import { LocationEngine } from '../src/features/geolocation'
+import { parseHistory } from '../src/features/history'
 
 afterEach(() => vi.unstubAllGlobals())
 

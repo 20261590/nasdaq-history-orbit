@@ -1,4 +1,4 @@
-import type { HostLocation } from '../../src/model'
+import type { HostLocation } from '../../src/shared/types'
 
 /** Public domains and deliberately synthetic values, never personal credentials. */
 export const integrationCanaries = [

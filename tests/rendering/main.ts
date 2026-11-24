@@ -1,6 +1,6 @@
 import { createApp, h, nextTick, ref } from 'vue'
-import OrbitGlobe from '../../src/components/OrbitGlobe.vue'
-import type { Marker, OrbitArc } from '../../src/globe-data'
+import { OrbitGlobe } from '../../src/features/globe'
+import type { Marker, OrbitArc } from '../../src/features/globe'
 import '../../src/style.css'
 
 const params = new URLSearchParams(location.search)

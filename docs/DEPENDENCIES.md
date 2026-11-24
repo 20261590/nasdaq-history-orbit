@@ -78,7 +78,7 @@ These are install/source-redistribution evidence gaps, not observed application 
 | Asset | Dimensions | Bytes | Usage |
 | --- | --- | --- | --- |
 | public/earth.jpg | 4096 x 2048 JPEG | 1,461,877 | Original retained texture; copied into dist but not referenced by application source. |
-| public/earth.webp | 4096 x 2048 WebP | 703,258 | Derived globe texture used by `src/components/OrbitGlobe.vue`. |
+| public/earth.webp | 4096 x 2048 WebP | 703,258 | Derived globe texture used by `src/features/globe/components/OrbitGlobe.vue`. |
 | public/earth-preview.webp | 684 x 640 WebP | 32,810 | Rendered landing-page preview used by `src/App.vue`. |
 
 The original JPEG is byte-identical to the [three-globe example image at commit 01b3eccb5dffe347b6d03251e35d201ba8ec06e5](https://raw.githubusercontent.com/vasturiano/three-globe/01b3eccb5dffe347b6d03251e35d201ba8ec06e5/example/img/earth-blue-marble.jpg), introduced on 2019-03-29. SHA-256: `228deba2e4b600146bdcb6cfa359b8ead6aacc2b1c13550a29cd82824cfa1c01`. All three public images exactly match their counterparts in the inspected `dist/`. Individual hashes and dimensions are in the asset evidence.
@@ -93,7 +93,7 @@ The [official NASA Blue Marble collection](https://science.nasa.gov/earth/earth-
 
 The inspected production snapshot has 16 files: one HTML entry, 11 JavaScript chunks, one CSS file, and the three public images. It contains no maps, hidden files, test/benchmark HTML, fixtures, documentation/evidence, Playwright reports, node_modules, logs, temporary files, or backup files. Searches for the named QA hooks/fixtures, benchmark title/path, Vite development client, source-map URLs, evidence paths, and development-server origins found no matches in its text assets. Third-party diagnostic strings are not classified as application debug endpoints.
 
-`index.html` enters through `src/main.ts`; the production config declares no additional HTML entry or copy plugin. `tests/rendering/benchmark.html` enters through its own test-only module and is not a production input. The 420-visit generator in `src/core/demo.ts` is intentionally imported by `src/App.vue` for the user-facing synthetic MOCK demonstration. Its synthetic URLs/coordinates are not uploaded history or a debug leak. Test IDs and third-party WebGL diagnostics are likewise not sufficient evidence of a shipping debug surface.
+`index.html` enters through `src/main.ts`; the production config declares no additional HTML entry or copy plugin. `tests/rendering/benchmark.html` enters through its own test-only module and is not a production input. The 420-visit generator in `src/features/history/core/demo.ts` is intentionally exposed through the History public API for the user-facing synthetic MOCK demonstration. Its synthetic URLs/coordinates are not uploaded history or a debug leak. Test IDs and third-party WebGL diagnostics are likewise not sufficient evidence of a shipping debug surface.
 
 Existing tests, rendering harnesses, `docs/evidence`, `playwright-report`, and `test-results` remain intentional workspace QA material. Their absence from the inspected distribution, rather than their presence in the workspace, determines this result. Deploy only the generated distribution; serving the workspace root would change the audited boundary.
 
