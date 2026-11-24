@@ -1,0 +1,41 @@
+.globe-panel { min-width: 0; position: relative; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: #080e18; color: #ecf2fa; }
+.globe-toolbar { padding: 16px 20px; display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; background: #101a28; }
+.camera-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.camera-buttons button { color: #ecf2fa; border-color: #2a3b50; background: #172436; padding: 8px 12px; font-size: 12px; }
+.globe-canvas { width: 100%; height: 530px; position: relative; overflow: hidden; background: #080e18; }
+.globe-canvas canvas { display: block; max-width: 100%; }
+.render-quality-note { position: absolute; z-index: 1; top: 12px; left: 12px; right: 12px; color: #a5b8d0; background: #101a28; padding: 8px 12px; border-radius: 6px; font-size: 12px; pointer-events: none; }
+.globe-hint { position: absolute; inset: 160px 16px auto; text-align: center; color: #a5b8d0; font-size: 14px; pointer-events: none; }
+.webgl-error { display: flex; justify-content: center; flex-direction: column; align-items: center; padding: 32px; height: 100%; gap: 24px; text-align: center; color: #ecf2fa; }
+.globe-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; padding: 8px 16px; color: #a5b8d0; font-size: 12px; }
+.globe-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #63dbd4; }
+.dot.amber { background: #f5cb82; }
+.current-visit { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 20px 24px 16px; border-bottom: 1px solid #2a3b50; }
+.current-visit strong { font-size: 20px; overflow-wrap: anywhere; }
+.current-visit time { color: #a5b8d0; font-size: 12px; font-variant-numeric: tabular-nums; }
+.globe-panel .muted { color: #a5b8d0; }
+.timeline { padding: 20px 24px; background: var(--panel); color: var(--text); }
+.timeline .muted { color: var(--muted); }
+.motion-status { display: grid; gap: 8px; margin-bottom: 16px; }
+.motion-status progress { width: 100%; }
+.playback-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.playback-row > label:not(.check) { flex-direction: row; align-items: center; gap: 8px; }
+.play-button { min-width: 112px; }
+.timeline-ends { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.time-jump { display: flex; gap: 12px; align-items: end; margin-top: 16px; }
+.timeline p { margin-top: 16px; }
+@media (min-width: 1600px) { .globe-canvas { height: 620px; } }
+@media (max-width: 900px) { .globe-canvas { height: 480px; } }
+@media (max-width: 600px) {
+  .globe-toolbar { padding: 12px; }
+  .camera-buttons { gap: 8px; }
+  .camera-buttons button { padding: 8px; }
+  .globe-canvas { height: 390px; }
+  .globe-legend { justify-content: start; padding: 12px; gap: 8px 16px; }
+  .current-visit { padding: 16px; }
+  .timeline { padding: 16px; }
+  .playback-row { gap: 12px; }
+  .time-jump { flex-wrap: wrap; }
+  .time-jump label { min-width: 0; flex: 1; }
+}

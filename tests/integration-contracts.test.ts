@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { effectScope, shallowRef } from 'vue'
-import { parseHistory } from '../src/core/history'
-import { buildShareInput } from '../src/core/share-input'
-import { computeStatistics } from '../src/core/stats'
-import { useExclusions } from '../src/useExclusions'
+import { parseHistory } from '../src/features/history'
+import { buildShareInput } from '../src/app/adapters/share-input'
+import { computeStatistics } from '../src/features/analytics'
+import { useExclusions } from '../src/features/security'
 import { integrationHistory, integrationHosts } from './fixtures/integration'
-import type { Visit } from '../src/model'
+import type { Visit } from '../src/shared/types'
 
 describe('local analysis and share policy', () => {
   it('keeps analysis and share-only exclusions independent and reversible', () => {

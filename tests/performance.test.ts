@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { parseHistory, sampleTimeline } from '../src/core/history'
-import { computeStatistics } from '../src/core/stats'
-import type { HostLocation } from '../src/model'
+import { parseHistory, sampleTimeline } from '../src/features/history'
+import { computeStatistics } from '../src/features/analytics'
+import type { HostLocation } from '../src/shared/types'
 
 const hosts: readonly HostLocation[] = Array.from({ length: 10 }, (_, index) => ({
   hostname: `site${index}.com`, status: index < 6 ? 'resolved' : 'unresolved', source: 'mock',

@@ -1,0 +1,103 @@
+import ky from 'ky'
+import { z } from 'zod'
+import { SafeBrowsingError, threatTypes } from './types'
+import type { HashSearchReply, ThreatType } from './types'
+
+const responseSchema = z.object({
+  cacheDuration: z.string(),
+  fullHashes: z.array(z.object({
+    fullHash: z.string(),
+    fullHashDetails: z.array(z.object({
+      threatType: z.unknown(),
+      attributes: z.array(z.unknown()).optional(),
+    })).optional(),
+  })).optional(),
+})
+
+const base64Pattern = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
+
+function normalizedHash(value: string, bytes: number): string | null {
+  if (!base64Pattern.test(value)) return null
+  try {
+    const decoded = atob(value)
+    return decoded.length === bytes ? btoa(decoded) : null
+  } catch {
+    return null
+  }
+}
+
+export function parseHashSearchResponse(input: unknown): HashSearchReply {
+  const parsed = responseSchema.safeParse(input)
+  if (!parsed.success) throw new SafeBrowsingError('INVALID_RESPONSE')
+
+  const duration = /^(\d+)(?:\.(\d{1,9}))?s$/.exec(parsed.data.cacheDuration)
+  const cacheDurationMs = duration === null ? NaN
+    : Number(duration[1]) * 1000 + Number(`0.${duration[2] ?? '0'}`) * 1000
+  if (!Number.isFinite(cacheDurationMs) || cacheDurationMs < 0
+    || cacheDurationMs > Number.MAX_SAFE_INTEGER) {
+    throw new SafeBrowsingError('INVALID_RESPONSE')
+  }
+
+  const matches = new Map<string, Set<ThreatType>>()
+  for (const hash of parsed.data.fullHashes ?? []) {
+    const fullHash = normalizedHash(hash.fullHash, 32)
+    if (fullHash === null) throw new SafeBrowsingError('INVALID_RESPONSE')
+    const threats = matches.get(fullHash) ?? new Set<ThreatType>()
+    for (const detail of hash.fullHashDetails ?? []) {
+      const threat = threatTypes.find(type => type === detail.threatType)
+      if (threat === undefined || (detail.attributes ?? []).some(attribute =>
+          attribute !== 'CANARY' && attribute !== 'FRAME_ONLY')) continue
+      if (detail.attributes?.includes('CANARY') || detail.attributes?.includes('FRAME_ONLY')) continue
+      threats.add(threat)
+    }
+    matches.set(fullHash, threats)
+  }
+  return {
+    matches: [...matches].filter(([, threats]) => threats.size > 0)
+      .map(([fullHash, threats]) => ({ fullHash, threats: [...threats] })),
+    cacheDurationMs,
+  }
+}
+
+export async function searchHashes(
+  prefixes: readonly string[], apiKey: string, signal: AbortSignal,
+): Promise<HashSearchReply> {
+  if (!apiKey.trim()) throw new SafeBrowsingError('KEY_REQUIRED')
+  const unique = [...new Set(prefixes)]
+  if (unique.length === 0 || unique.length > 1000
+    || unique.some(prefix => normalizedHash(prefix, 4) === null)) {
+    throw new SafeBrowsingError('INVALID_RESPONSE')
+  }
+  const params = new URLSearchParams({ alt: 'json' })
+  for (const prefix of unique) params.append('hashPrefixes', prefix)
+  try {
+    const response = await ky.get('https://safebrowsing.googleapis.com/v5/hashes:search', {
+      searchParams: params,
+      headers: { 'X-Goog-Api-Key': apiKey },
+      retry: 0,
+      throwHttpErrors: false,
+      timeout: 10_000,
+      signal,
+      credentials: 'omit',
+      referrerPolicy: 'strict-origin-when-cross-origin',
+      redirect: 'error',
+    })
+    if (!response.ok) {
+      if ([400, 401, 403].includes(response.status)) {
+        throw new SafeBrowsingError('AUTH', response.status)
+      }
+      if (response.status === 429) throw new SafeBrowsingError('RATE_LIMITED', response.status)
+      throw new SafeBrowsingError('NETWORK', response.status)
+    }
+    let input: unknown
+    try {
+      input = await response.json()
+    } catch {
+      throw new SafeBrowsingError('INVALID_RESPONSE')
+    }
+    return parseHashSearchResponse(input)
+  } catch (error) {
+    if (error instanceof SafeBrowsingError) throw error
+    throw new SafeBrowsingError(signal.aborted ? 'CANCELLED' : 'NETWORK')
+  }
+}

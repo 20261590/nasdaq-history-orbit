@@ -1,0 +1,11 @@
+.lookup-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px; border: 1px solid var(--border); background: var(--panel); border-radius: 12px; }
+.lookup-explanation { display: flex; flex-direction: column; gap: 4px; flex: 1 1 350px; }
+.lookup-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; }
+.check { display: inline-flex; min-height: 44px; align-items: center; gap: 8px; cursor: pointer; }
+.lookup-progress { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 14px; width: 100%; color: var(--muted); }
+progress { width: 180px; height: 8px; accent-color: var(--accent); }
+@media (max-width: 900px) { .lookup-controls { width: 100%; } }
+@media (max-width: 600px) {
+  .lookup-bar { padding: 16px; }
+  .lookup-controls { gap: 12px; align-items: stretch; flex-direction: column; }
+}

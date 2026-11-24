@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { describeLocation } from '../src/core/location-display'
-import { parseGeo } from '../src/core/geo'
-import type { GeoLocation } from '../src/model'
+import { describeLocation, parseGeo } from '../src/features/geolocation'
+import type { GeoLocation } from '../src/shared/types'
 
 const korea: GeoLocation = {
   latitude: 37.5, longitude: 127, country: 'South Korea', countryCode: 'KR',

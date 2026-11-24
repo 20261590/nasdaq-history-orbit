@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { computeComparison, resolveComparisonPeriods } from '../src/core/comparison'
-import { parseHistory } from '../src/core/history'
-import type { AnalyticsVisit, ComparisonPeriods } from '../src/core/comparison'
-import type { GeoLocation, HostLocation } from '../src/model'
+import { computeComparison, resolveComparisonPeriods } from '../src/features/analytics'
+import type { AnalyticsVisit, ComparisonPeriods } from '../src/features/analytics'
+import { parseHistory } from '../src/features/history'
+import type { GeoLocation, HostLocation } from '../src/shared/types'
 
 const DAY = 86_400_000
 const day = (year: number, month: number, date: number): number => Date.UTC(year, month - 1, date) / DAY

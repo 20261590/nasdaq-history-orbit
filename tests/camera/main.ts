@@ -1,4 +1,4 @@
-import '../../src/validation-config'
+import '../../src/app/adapters/validation-config'
 import { createApp } from 'vue'
 import { PerspectiveCamera, Scene } from 'three'
 import App from '../../src/App.vue'

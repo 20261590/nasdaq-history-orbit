@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { parseHistory } from '../src/core/history'
-import { parseDns } from '../src/core/geo'
-import { makeArcs } from '../src/globe-data'
-import type { HostLocation } from '../src/model'
+import { parseHistory } from '../src/features/history'
+import { parseDns } from '../src/features/geolocation'
+import { makeArcs } from '../src/features/globe'
+import type { HostLocation } from '../src/shared/types'
 
 describe('import accuracy regressions', () => {
   it.each([false, true])('does not bridge an uninspected tail event, overCap=%s', overCap => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { ActivityConfigurationError, computeActivity } from '../src/core/activity'
-import type { ActivityVisit } from '../src/core/activity'
-import { parseHistory, sampleTimeline } from '../src/core/history'
+import { ActivityConfigurationError, computeActivity } from '../src/features/analytics'
+import type { ActivityVisit } from '../src/features/analytics'
+import { parseHistory, sampleTimeline } from '../src/features/history'
 
 const BASE = Date.UTC(2025, 0, 6)
 const visit = (order: number, offsetMs: number, domain = 'a.com'): ActivityVisit =>

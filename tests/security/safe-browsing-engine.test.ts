@@ -1,0 +1,169 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { SafeBrowsingEngine } from '../../src/features/security/safe-browsing/engine'
+import { hashUrl } from '../../src/features/security/safe-browsing/protocol'
+
+const options = { apiKey: 'local-private-key', consent: true }
+const target = { id: 'opaque-1', url: 'https://private.example.org/secret?token=hidden' }
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.useRealTimers()
+})
+
+describe('session Safe Browsing scans', () => {
+  it('does not request without consent or a key and classifies invalid URLs locally', async () => {
+    const transport = vi.fn(async () => Response.json({ cacheDuration: '60s' }))
+    vi.stubGlobal('fetch', transport)
+    const engine = new SafeBrowsingEngine()
+    expect((await engine.scan([target], { ...options, consent: false })).results)
+      .toMatchObject([{ status: 'NOT_CHECKED', error: 'CONSENT_REQUIRED' }])
+    expect((await engine.scan([target], { ...options, apiKey: ' ' })).results)
+      .toMatchObject([{ status: 'NOT_CHECKED', error: 'KEY_REQUIRED' }])
+    expect((await engine.scan([{ id: 'bad', url: 'file:///private/path' }], options)).results)
+      .toMatchObject([{ status: 'NOT_CHECKED', error: 'INVALID_URL' }])
+    expect(transport).not.toHaveBeenCalled()
+  })
+
+  it('matches only exact full hashes, deduplicates URLs, and reuses positive and negative prefix cache', async () => {
+    const hashed = await hashUrl(target.url)
+    const matching = hashed[0]
+    expect(matching).toBeDefined()
+    const digest = atob(matching.fullHash)
+    const collision = btoa(digest.slice(0, -1)
+      + String.fromCharCode(digest.charCodeAt(digest.length - 1) ^ 1))
+    const transport = vi.fn(async () => Response.json({
+      cacheDuration: '3600s',
+      fullHashes: [
+        { fullHash: collision, fullHashDetails: [{ threatType: 'MALWARE', attributes: [] }] },
+        { fullHash: matching.fullHash,
+          fullHashDetails: [{ threatType: 'SOCIAL_ENGINEERING', attributes: [] }] },
+      ],
+    }))
+    vi.stubGlobal('fetch', transport)
+    const engine = new SafeBrowsingEngine()
+    const duplicate = { ...target, id: 'opaque-2' }
+
+    const first = await engine.scan([target, duplicate], options)
+    const second = await engine.scan([target, duplicate], options)
+
+    expect(first.results).toMatchObject([
+      { status: 'KNOWN_THREAT', threats: ['SOCIAL_ENGINEERING'], error: null },
+      { status: 'KNOWN_THREAT', threats: ['SOCIAL_ENGINEERING'], error: null },
+    ])
+    expect(first.requests).toBe(1)
+    expect(second.requests).toBe(0)
+    expect(second.results[0]?.checkedAt).toBe(first.results[0]?.checkedAt)
+    expect(transport).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(second)).not.toContain(target.url)
+    expect(JSON.stringify(second)).not.toContain(options.apiKey)
+  })
+
+  it('keeps the original evidence time, marks it stale at 30 minutes, and refreshes only on recheck', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'))
+    const transport = vi.fn(async () => Response.json({ cacheDuration: '3600s', fullHashes: [] }))
+    vi.stubGlobal('fetch', transport)
+    const engine = new SafeBrowsingEngine()
+    const first = await engine.scan([target], options)
+    await vi.advanceTimersByTimeAsync(30 * 60 * 1000 + 1)
+
+    expect(engine.snapshot().results[0]).toMatchObject({
+      status: 'STALE', checkedAt: first.results[0]?.checkedAt,
+    })
+    const cached = await engine.scan([target], options)
+    expect(cached.results[0]).toMatchObject({
+      status: 'STALE', checkedAt: first.results[0]?.checkedAt,
+    })
+    expect(transport).toHaveBeenCalledTimes(1)
+    const refreshed = await engine.scan([target], { ...options, forceRefresh: true })
+    expect(refreshed.results[0]).toMatchObject({
+      status: 'NO_KNOWN_THREAT', checkedAt: Date.now(),
+    })
+    expect(transport).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(3600_001)
+    expect(engine.snapshot().results[0]?.status).toBe('STALE')
+    expect((await engine.scan([target], options)).requests).toBe(1)
+  })
+
+  it('never treats an unresolved prefix as a clean miss after a failed batch', async () => {
+    const targets = Array.from({ length: 102 }, (_, index) => ({
+      id: `id-${index}`, url: `https://host${index}.example.org/`,
+    }))
+    const transport = vi.fn(async () => transport.mock.calls.length === 1
+      ? Response.json({ cacheDuration: '60s', fullHashes: [] })
+      : Response.json({ fullHashes: [] }))
+    vi.stubGlobal('fetch', transport)
+    const engine = new SafeBrowsingEngine()
+
+    const snapshot = await engine.scan(targets, options)
+
+    expect(snapshot.requests).toBe(4)
+    expect(snapshot.results[0]).toMatchObject({ status: 'NO_KNOWN_THREAT', error: null })
+    expect(snapshot.results.at(-1)).toMatchObject({
+      status: 'CHECK_FAILED', threats: [], error: 'INVALID_RESPONSE',
+    })
+  })
+
+  it('stops after 429 and retains completed work when an in-flight scan is cancelled', async () => {
+    const targets = Array.from({ length: 205 }, (_, index) => ({
+      id: `id-${index}`, url: `https://host${index}.example.org/`,
+    }))
+    const transport = vi.fn(async () => transport.mock.calls.length === 1
+      ? Response.json({ cacheDuration: '60s', fullHashes: [] })
+      : new Response(null, { status: 429 }))
+    vi.stubGlobal('fetch', transport)
+    const engine = new SafeBrowsingEngine()
+    const rateLimited = await engine.scan(targets, options)
+    expect(rateLimited.requests).toBe(2)
+    expect(rateLimited.results[0]?.status).toBe('NO_KNOWN_THREAT')
+    expect(rateLimited.results.at(-1)).toMatchObject({
+      status: 'CHECK_FAILED', error: 'RATE_LIMITED',
+    })
+
+    let secondStarted: () => void = () => { throw new Error('uninitialized') }
+    const reachedSecond = new Promise<void>(resolve => { secondStarted = resolve })
+    const blocked = vi.fn(async (request: Request) => {
+      if (blocked.mock.calls.length === 1) return Response.json({ cacheDuration: '60s' })
+      secondStarted()
+      return new Promise<Response>((_, reject) => request.signal.addEventListener(
+        'abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true }))
+    })
+    vi.stubGlobal('fetch', blocked)
+    engine.clear()
+    const scan = engine.scan(targets, options)
+    await reachedSecond
+    engine.cancel()
+    const cancelled = await scan
+    expect(cancelled.results[0]?.status).toBe('NO_KNOWN_THREAT')
+    expect(cancelled.results.at(-1)).toMatchObject({
+      status: 'NOT_CHECKED', error: 'CANCELLED',
+    })
+    expect(cancelled.running).toBe(false)
+    engine.clear()
+    expect(engine.snapshot().results).toEqual([])
+  })
+
+  it('invalidates in-flight generations and caches when cleared', async () => {
+    let started: () => void = () => { throw new Error('uninitialized') }
+    const requestStarted = new Promise<void>(resolve => { started = resolve })
+    const transport = vi.fn(async (request: Request) => {
+      if (transport.mock.calls.length === 1) {
+        started()
+        return new Promise<Response>((_, reject) => request.signal.addEventListener(
+          'abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true }))
+      }
+      return Response.json({ cacheDuration: '60s' })
+    })
+    vi.stubGlobal('fetch', transport)
+    const engine = new SafeBrowsingEngine()
+    const oldScan = engine.scan([target], options)
+    await requestStarted
+
+    engine.clear()
+    expect((await oldScan).results).toEqual([])
+    const fresh = await engine.scan([target], options)
+    expect(fresh.results[0]?.status).toBe('NO_KNOWN_THREAT')
+    expect(fresh.requests).toBe(1)
+    expect(transport).toHaveBeenCalledTimes(2)
+  })
+})

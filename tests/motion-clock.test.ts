@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { MotionClock, dwellDurationMs, flightDurationMs, motionProgress } from '../src/motion-clock'
-import type { CameraCommand } from '../src/motion-clock'
+import { MotionClock, dwellDurationMs, flightDurationMs, motionProgress } from '../src/features/globe'
+import type { CameraCommand } from '../src/features/globe'
 
 const command = (key = 1, kind: CameraCommand['kind'] = 'sequence', explicit = true): CameraCommand => ({
   key, kind, explicit, target: { lat: 37.5665, lng: 126.978, distance: 0.18 },

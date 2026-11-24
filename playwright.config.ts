@@ -2,6 +2,7 @@ import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
   testDir: './tests/e2e',
+  testIgnore: 'security-no-deployment-key.spec.ts',
   timeout: 90_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
@@ -20,5 +21,6 @@ export default defineConfig({
     command: 'bun run dev --port 5173 --strictPort',
     url: 'http://127.0.0.1:5173',
     reuseExistingServer: true,
+    env: { VITE_SAFE_BROWSING_API_KEY: 'SYNTHETIC_SAFE_BROWSING_DEPLOYMENT_KEY_742' },
   },
 })

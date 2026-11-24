@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { parseHistory } from '../src/core/history'
-import { buildShareInput } from '../src/core/share-input'
+import { parseHistory } from '../src/features/history'
+import { buildShareInput } from '../src/app/adapters/share-input'
 import { integrationCanaries, integrationHistory, integrationHosts } from './fixtures/integration'
 
 const anchor = Math.floor(Date.UTC(2026, 10, 11) / 86_400_000)

@@ -1,4 +1,4 @@
-import './validation-config'
+import './app/adapters/validation-config'
 import { createApp } from 'vue'
 import App from './App.vue'
 import './style.css'

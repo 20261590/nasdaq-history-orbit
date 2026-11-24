@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Vector3 } from 'three'
-import { createCameraFlight, sampleAutomaticFlight, sampleCameraFlight } from '../src/camera-flight'
-import { motionProgress } from '../src/motion-clock'
+import { createCameraFlight, motionProgress, sampleAutomaticFlight, sampleCameraFlight } from '../src/features/globe'
 
 describe('camera travel', () => {
   const from = new Vector3(118, 0, 0)

@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { playbackGroup } from '../src/playback-groups'
-import { parseHistory, sampleTimeline } from '../src/core/history'
-import { makeArcs } from '../src/globe-data'
-import type { HostLocation } from '../src/model'
+import { makeArcs, playbackGroup } from '../src/features/globe'
+import { parseHistory, sampleTimeline } from '../src/features/history'
+import type { HostLocation } from '../src/shared/types'
 
 describe('proven consecutive playback grouping', () => {
   it('summarizes a large same-site run before advancing without changing original visits', () => {

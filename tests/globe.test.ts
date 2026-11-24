@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { makeArcs, makeMarkers } from '../src/globe-data'
-import type { HostLocation, Visit } from '../src/model'
+import { makeArcs, makeMarkers } from '../src/features/globe'
+import type { HostLocation, Visit } from '../src/shared/types'
 
 const visit = (hostname: string, order: number): Visit => ({
   id: `${order}`, hostname, domain: hostname, timestamp: order * 1000, order,

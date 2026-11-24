@@ -1,0 +1,57 @@
+export const threatTypes = [
+  'MALWARE', 'SOCIAL_ENGINEERING', 'UNWANTED_SOFTWARE', 'POTENTIALLY_HARMFUL_APPLICATION',
+] as const
+
+export type ThreatType = typeof threatTypes[number]
+export type ReputationStatus =
+  | 'KNOWN_THREAT' | 'NO_KNOWN_THREAT' | 'NOT_CHECKED' | 'CHECK_FAILED' | 'STALE'
+export type FailureCode =
+  | 'AUTH' | 'RATE_LIMITED' | 'NETWORK' | 'INVALID_RESPONSE' | 'INVALID_URL'
+  | 'CANCELLED' | 'REQUEST_LIMIT' | 'CONSENT_REQUIRED' | 'KEY_REQUIRED'
+
+/** Raw URLs remain inside Security; results expose only the opaque local id. */
+export interface ReputationTarget {
+  readonly id: string
+  readonly url: string
+}
+export interface ReputationResult {
+  readonly id: string
+  readonly status: ReputationStatus
+  readonly threats: readonly ThreatType[]
+  readonly checkedAt: number | null
+  readonly expiresAt: number | null
+  readonly error: FailureCode | null
+}
+
+export interface FullHashMatch {
+  readonly fullHash: string
+  readonly threats: readonly ThreatType[]
+}
+
+export interface HashSearchReply {
+  readonly matches: readonly FullHashMatch[]
+  readonly cacheDurationMs: number
+}
+
+export interface ReputationSnapshot {
+  readonly results: readonly ReputationResult[]
+  readonly total: number
+  readonly completed: number
+  readonly requests: number
+  readonly running: boolean
+  readonly lastCheckedAt: number | null
+}
+
+export interface ScanOptions {
+  readonly apiKey: string
+  readonly consent: boolean
+  readonly forceRefresh?: boolean
+  readonly onUpdate?: (snapshot: ReputationSnapshot) => void
+}
+
+export class SafeBrowsingError extends Error {
+  constructor(readonly code: FailureCode, readonly httpStatus?: number) {
+    super(code)
+    this.name = 'SafeBrowsingError'
+  }
+}

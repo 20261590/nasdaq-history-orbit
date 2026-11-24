@@ -4,7 +4,7 @@
 
 ## 현재 저장소 상태
 
-2026-11-16 확인 시 현재 폴더는 Git 저장소가 아니며 `git status --short --branch`, `git remote -v`는 모두 exit 128이었습니다. GitHub 소유자·저장소명·기본 브랜치·원격 주소를 확인할 수 없어 임의로 생성하거나 설정하지 않았습니다.
+2026-11-23 현재 Git 저장소의 `feature/safe-browsing` 브랜치에서 배포 준비 변경을 검증했다. 기본 브랜치 반영, push, Pages 활성화, Secret 등록과 실제 배포는 수행하지 않았다. GitHub 소유자와 최종 Pages URL을 코드에서 추정하지 않는다.
 
 실제 저장소 정보는 Actions 실행 시 `actions/configure-pages@v5`가 Pages API에서 읽습니다. 따라서 저장소명을 나중에 정해도 코드 안의 임시 이름을 찾아 바꿀 필요가 없습니다.
 
@@ -17,11 +17,11 @@
 
 위 표는 유형 설명이며 실제 저장소 주소를 추정한 것이 아닙니다. 사용자·조직 페이지 저장소는 GitHub의 `소유자.github.io` 명명 규칙을 따릅니다. 실제 사이트 메타데이터를 사용하므로 Pages에서 설정한 경로가 빌드에 반영됩니다.
 
-`vite.config.ts`는 `PAGES_BASE_PATH`를 사용하고, 설정하지 않은 로컬 개발·기존 RC 실행은 이전처럼 `./`를 사용합니다. 환경 변수는 `VITE_` 접두사를 사용하지 않으며 별도 인증 정보를 클라이언트에 전달하지 않습니다.
+`vite.config.ts`는 `PAGES_BASE_PATH`를 사용하고, 설정하지 않은 로컬 개발·기존 RC 실행은 이전처럼 `./`를 사용합니다. Safe Browsing 공개 시연 빌드만 `VITE_SAFE_BROWSING_API_KEY`를 사용합니다. 이 값은 생성된 JavaScript에 포함되는 공개 키이며 비밀 자격 증명으로 취급하지 않습니다. 설정과 교체 절차는 [SAFE_BROWSING_DEPLOYMENT.md](SAFE_BROWSING_DEPLOYMENT.md)를 따릅니다.
 
 ## 자동 배포 순서
 
-`.github/workflows/deploy.yml`은 실제 저장소의 **기본 브랜치**에 대한 push 또는 해당 브랜치의 수동 실행을 처리합니다. 브랜치명을 `main`이나 `master`로 가정하지 않습니다. 다른 브랜치·태그에서는 배포 job을 실행하지 않습니다.
+`.github/workflows/deploy.yml`은 실제 저장소의 **기본 브랜치**에 대한 push 또는 해당 브랜치의 수동 실행을 배포 대상으로 처리합니다. 브랜치명을 `main`이나 `master`로 가정하지 않습니다. PR에서는 Secret·Pages API·artifact를 사용하지 않는 별도 검증 job만 실행하며 다른 브랜치·태그에서는 배포 job을 실행하지 않습니다.
 
 1. 소스 checkout. 인증 정보를 Git 설정에 남기지 않습니다.
 2. RC에서 사용한 Bun `1.4.3` 설치.
@@ -30,7 +30,7 @@
 5. `bun run typecheck`.
 6. `bun run lint`.
 7. `bun run test`.
-8. 실제 Pages 경로로 `bun run build`.
+8. Secret이 있으면 제한된 Safe Browsing 시연 키를 환경변수로 전달하고, 실제 Pages 경로로 `bun run build`. Secret이 없으면 경고 후 키 없는 앱을 빌드합니다.
 9. 모든 검사가 성공한 `dist/`만 Pages artifact로 업로드.
 10. build 성공 후 `github-pages` 환경에서 artifact 배포.
 
@@ -38,7 +38,7 @@ Build job은 `contents: read`, `pages: read`를 사용합니다. Deploy job에�
 
 ## 사용자가 활성화할 절차
 
-1. 사용할 실제 GitHub 저장소와 기본 브랜치를 결정하고, 이 프로젝트를 해당 Git 작업 폴더에서 관리합니다. 현재 작업은 저장소를 생성하거나 remote를 추가하지 않았습니다.
+1. 사용할 실제 GitHub 저장소와 기본 브랜치를 확인합니다. 현재 작업은 remote·기본 브랜치·저장소 설정을 변경하지 않았습니다.
 2. GitHub **Settings → Pages → Build and deployment → Source → GitHub Actions**를 선택합니다. 계정·저장소의 Pages 사용 자격과 Actions 사용 허용 정책도 확인합니다.
 3. 사용자가 검토·승인한 뒤 기본 브랜치로 commit/push합니다. 이후 기본 브랜치 push마다 검증과 배포가 자동 실행됩니다.
 4. 이미 push한 뒤 Pages를 활성화했다면 첫 실행이 메타데이터 조회에서 실패했을 수 있습니다. **Actions → Deploy History Orbit to GitHub Pages → Run workflow**에서 기본 브랜치를 선택하거나 실패한 실행을 재실행합니다.
@@ -71,8 +71,9 @@ PAGES_BASE_PATH=/__pages_qa__/ bun run preview --port 5176 --strictPort
 2. 개발자 도구 Network에서 entry JS, 동적 globe/chart chunk, `earth-preview.webp`, `earth.webp`, `THIRD_PARTY_NOTICES.txt`가 올바른 하위 경로로 HTTP 200인지 확인합니다.
 3. 공개 비식별 fixture를 선택하고 6회·3사이트를 확인합니다. 동의 전에는 DNS·GeoJS 요청이 없어야 합니다.
 4. 실제 위치 공급자에 동의한 뒤 Google DNS A/AAAA 및 GeoJS 공용 IPv4/IPv6 조회가 CORS 오류 없이 읽히는지 확인합니다. 위치 미확인 항목을 통계에서 빼거나 MOCK으로 자동 대체하지 않아야 합니다.
-5. 짧은 익명 공유 URL을 만들고 새 탭·별도 브라우저에서 직접 열거나 새로고침합니다. 주소에 실제 프로젝트 경로와 `#v=2&d=...`가 유지되고, 같은 요약으로 복원되며 DNS·GeoJS 재조회가 없어야 합니다.
-6. document의 **실제 Response Headers**에서 CSP, HTTPS 관련 정책을 확인합니다. Console에서 CSP 위반을 확인합니다. 아래 Console 호출은 입력 데이터 없이 공개 주소만 사용합니다.
+5. Safe Browsing 시연 키를 등록했다면 Security 화면에 “시연용 배포 키 사용 가능”이 표시되고 개인 키 입력이 없는지 확인합니다. 동의 전 Google 요청 0건과 동의 후 `hashes.search` 응답을 별도로 확인합니다.
+6. 짧은 익명 공유 URL을 만들고 새 탭·별도 브라우저에서 직접 열거나 새로고침합니다. 주소에 실제 프로젝트 경로와 `#v=2&d=...`가 유지되고, 같은 요약으로 복원되며 DNS·GeoJS 재조회가 없어야 합니다.
+7. document의 **실제 Response Headers**에서 CSP, HTTPS 관련 정책을 확인합니다. Console에서 CSP 위반을 확인합니다. 아래 Console 호출은 입력 데이터 없이 공개 주소만 사용합니다.
 
 ```js
 await Promise.all([
@@ -96,13 +97,13 @@ await Promise.all([
 
 일반 GitHub Pages는 저장소의 `_headers` 파일로 임의 HTTP 헤더를 설정하는 기능을 제공하지 않습니다. 이전 RC 로컬 호스트의 CSP·X-Frame-Options·캐시 헤더를 Pages가 그대로 제공한다고 주장하지 않습니다.
 
-이번에는 CSP meta 태그나 응용 기능을 새로 추가하지 않았습니다. 실제 CSP가 없다면 “미설정”으로 기록합니다. 존재한다면 `script-src`의 eval 허용 없이 동작하는지, `connect-src`가 `https://dns.google`과 `https://get.geojs.io`를 허용하는지 확인합니다. `frame-ancestors`는 meta 태그로 대체할 수 없습니다. 이 차이는 GitHub Pages 운영 제약이며 다른 호스팅이나 프록시를 도입해 우회하지 않습니다.
+이번에는 CSP meta 태그나 응용 기능을 새로 추가하지 않았습니다. 실제 CSP가 없다면 “미설정”으로 기록합니다. 존재한다면 `script-src`의 eval 허용 없이 동작하는지, `connect-src`가 `https://dns.google`, `https://get.geojs.io`, `https://safebrowsing.googleapis.com`을 허용하는지 확인합니다. `frame-ancestors`는 meta 태그로 대체할 수 없습니다. 이 차이는 GitHub Pages 운영 제약이며 다른 호스팅이나 프록시를 도입해 우회하지 않습니다.
 
 브라우저 캐시와 실제 버전 갱신 역시 Pages 응답에서 확인합니다. 새 배포 후 새 HTML이 새 해시 chunk를 읽는지 점검하되, 기존 로컬 RC 호스트의 캐시 정책을 적용된 것으로 보고하지 않습니다.
 
 ## Git 포함 전 개인정보 점검
 
-현재는 `.git`이 없어 index·추적 파일·과거 commit에 대한 “미포함” 증명을 할 수 없습니다. 파일시스템 후보 점검과 Git 검증을 구분합니다. 실제 Git 작업 폴더에서는 사용자가 commit 전에 다음을 확인해야 합니다.
+현재 작업 폴더는 Git 저장소다. 실제 키·로컬 `.env`·개인 방문기록이 추적되지 않았는지 사용자가 commit 전에 다음을 다시 확인해야 합니다.
 
 ```sh
 git status --short

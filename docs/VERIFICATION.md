@@ -154,7 +154,7 @@ desktop 1440 및 iPhone 14 profile(390px, DPR3, touch)의 Chromium에서 다음�
 
 전체 SHA 비교 목록은 `changes.json`, 실제 소스 차이는 `source-changes.patch`입니다.
 
-- 코어: `src/core/history.ts`, `dns.ts`, `geo.ts`, 신규 `location-display.ts`.
+- 코어: `src/features/history/core/history.ts`, `src/features/geolocation/services/dns.ts`, `src/features/geolocation/core/geo.ts`, `src/features/geolocation/core/location-display.ts`.
 - 공유: `src/share/codec.ts`, 신규 `wire.ts`, `qr.ts`.
 - 화면·렌더: `src/App.vue`, `style.css`, `components/OrbitGlobe.vue`, `vite.config.ts`.
 - 에셋: `public/earth-preview.webp`, `public/earth.webp`. 원래 JPEG는 보존.

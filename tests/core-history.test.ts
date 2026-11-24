@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filterVisits, parseHistory, sampleTimeline } from '../src/core/history'
+import { filterVisits, parseHistory, sampleTimeline } from '../src/features/history'
 
 describe('history import', () => {
   it.each([

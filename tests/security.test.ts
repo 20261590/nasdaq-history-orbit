@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { inspectSecurity } from '../src/core/security'
-import type { FindingType } from '../src/core/security'
-import type { Visit } from '../src/model'
+import { inspectSecurity } from '../src/features/security'
+import type { FindingType } from '../src/features/security'
+import type { Visit } from '../src/shared/types'
 
 const timestamp = Date.UTC(2025, 4, 12, 19, 45)
 function visit(url?: string, order = 0): Visit {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { LocationEngine } from '../src/core/geo'
-import type { LookupProgress, Visit } from '../src/model'
+import { LocationEngine } from '../src/features/geolocation'
+import type { LookupProgress, Visit } from '../src/shared/types'
 
 function visitsFor(...hostnames: string[]): readonly Visit[] {
   return hostnames.map((hostname, order) => ({
